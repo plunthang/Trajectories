@@ -1,0 +1,274 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec 12 00:51:03 2023
+
+@author: plunt
+"""
+from scipy.integrate import solve_ivp
+import numpy as np
+import matplotlib.pyplot as plt
+from math import sin, cos, pi
+
+# CONSTANTS
+μ = 379312077e8
+R = 60268e3
+g_10 = 21141e-9
+Ω = 1.7e-4
+j_2 = 1.629071e-2
+
+# Constants related to charged dust
+ρ = 1e3
+b = 1e-9
+V = 10
+ε = 8.85e-12
+μ_0 = 4*pi*1e-7
+
+# INITIAL CONDITIONS
+r0 = 1.12*R
+#y_kep = (μ / r0)**0.5
+#Co_y_kep = y_kep/r0
+aS = (μ / r0 ** 3)**0.5
+
+#EVENT FUNCTONS
+def event_func_r(t, p):
+  return p[0] - R
+
+event_func_r.terminal = True
+event_func_r.direction = -1         # for r DECRESING 
+
+def event_func_outer(t, p):
+  return p[0] - 7156e4
+
+event_func_outer.terminal = True
+event_func_outer.direction = +1     # for r INCREASING
+
+# LIST OF VALUES OF b
+b_values_1 = np.array([0.010e-9,0.013e-9,0.016e-9,0.019e-9,0.021e-9,0.024e-9,0.027e-9,0.03e-9])             # stable
+b_values_2 = np.array([0.040e-9,0.060e-9,0.080e-9,0.090e-9,0.100e-9])  # cor_hits
+b_values_3 = np.array( [0.110e-9, 0.200e-9,0.400e-9,0.600e-9,0.800e-9,0.900e-9]) # out /Cor_hits
+b_values_4 = np.array( [1e-9,3e-9,5e-9,7e-9,9e-9,1e-8,5e-8,1e-7,5e-7,1e-6,5e-6])       # hits
+#b_values_1 = np.array([0.01e-9,0.02e-9,0.03e-9])
+#b_values_1 = np.array([0.010e-9,0.015e-9,0.020e-9,0.025e-9,0.03e-9])
+
+#To include both the starting and ending numbers( np.linspace)
+b_values = np.concatenate((b_values_1,b_values_2, b_values_3, b_values_4))
+
+from matplotlib import cm
+rainbow_cmap = cm.rainbow
+colors = [rainbow_cmap(i) for i in np.linspace(0, 1, len(b_values))]
+#colors =['magenta','indigo','darkblue','navy','blue','lightskyblue','dodgerblue','deepskyblue']#,,'midnightblue''aqua']#,'cyan']#,'paleturquoise']#,'darkturquoise']
+
+# Plot 1-dimensional plots (time vs r, theta, etc.)
+fig, axs_1d = plt.subplots(2, 3, figsize=(14, 8), dpi=160)
+fig.suptitle("3D Trajectories for (1-3)e-11 +ve charged dusts")
+#fig.subplots_adjust(wspace=0.5, hspace=0.5)
+
+# POLAR PLOTS
+fig_polar, axs_polar  = plt.subplots(subplot_kw={'projection':'polar'},dpi=200)
+axs_polar.set_rlabel_position(30)
+axs_polar.set_title("Trajectories of (1-3)e-11 Keplerian +ve charged dusts")
+
+# PLOT 3D TRAJECTORIE for different b_values
+fig_3d = plt.figure(dpi=200)
+ax_3d = plt.axes(projection="3d")
+ax_3d.set_xlabel('X-Axis')
+ax_3d.set_ylabel('Y-Axis')
+ax_3d.set_zlabel('Z-Axis')
+ax_3d.set_title("3D Trajectories for (1-3)e-11 +ve charged dusts")
+#ax_3d.grid(True, color='yellow',linestyle='dotted', linewidth=0.1, alpha=0.1)
+
+ax_3d.xaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+ax_3d.yaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+ax_3d.zaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+
+# PLOT 3D TRAJECTORIES for different b_values around the same sphere
+fig_3d_sphere_center = plt.figure(dpi=200)
+ax_3d_sphere_center = plt.axes(projection="3d")
+ax_3d_sphere_center.set_xlabel('X-Axis')
+ax_3d_sphere_center.set_ylabel('Y-Axis')
+ax_3d_sphere_center.set_zlabel('Z-Axis')
+ax_3d_sphere_center.set_title("3D Trajectories for (1-3)e-11 +ve charged dusts")
+#ax_3d_sphere_center.grid(True, color='gray',linestyle='solid', linewidth=0.1, alpha=0.1)
+
+# Plot the sphere at the center
+phi_sphere = np.linspace(0, 2 * np.pi, 100)
+theta_sphere = np.linspace(0, np.pi, 100)
+xm_sphere = R * np.outer(np.cos(phi_sphere), np.sin(theta_sphere))
+ym_sphere = R * np.outer(np.sin(phi_sphere), np.sin(theta_sphere))
+zm_sphere = R * np.outer(np.ones(np.size(phi_sphere)), np.cos(theta_sphere))
+ax_3d_sphere_center.plot_surface(xm_sphere, ym_sphere, zm_sphere, rstride=1, cstride=1, cmap=plt.get_cmap('copper'),
+                                 linewidth=0.5, antialiased=False, alpha=0.8)
+# Set background color to black
+ax_3d_sphere_center.xaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+ax_3d_sphere_center.yaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+ax_3d_sphere_center.zaxis.set_pane_color((0.0, 0.0, 0.0, 1.0))
+
+fig_paths, ax_paths = plt.subplots(dpi=200)  # Set background color to black
+ax_paths.set_facecolor('black')
+ax_paths.invert_xaxis()
+
+# Iterate over different values of b
+for i, b_value in enumerate(b_values):
+    # Update parameters based on the current value of b
+    m = (4/3) * pi * (b_value**3) * ρ
+    q = 4 * pi * ε * b_value * V
+    β = q / m
+
+    def odes(t, p):
+        # Extracting variables from the array
+        r, x, θ, y, ϕ, z = p
+        μ = 379312077e8                      # m^3/s^2  G = 6.67408e-11m^3/kg*s^ # M = 5.68e26 #kg 
+        R = 60268e3                          # metre
+        j_2 = 1.629071e-2
+        g_10 = 21141e-9                      #
+        Ω = 1.7e-4                           # rad/second
+        μ_0 = 4*pi*1e-7 
+        B_θ = μ_0*(R/r)**3*g_10*sin(θ)
+        B_r = μ_0*(R/r)**3*g_10*cos(θ)
+        β = q/m               #2.655                # q/m = -3.46 x 10^3 C/kg, 
+
+        # Define the ODEs
+        drdt = x
+        dxdt = r * ((y**2 + ((z + Ω)**2) * (sin(θ)**2)) - β * z * sin(θ) * B_θ) - \
+               (μ / r**2) * (1 - (3 / 2) * j_2 * ((R / r)**2) * ((3 * cos(θ)**2) - 1))
+        dθdt = y
+        dydt = (-2 * x * y + r * ((z + Ω)**2) * sin(θ) * cos(θ) + (β * r * z * sin(θ) * B_r)) / r + \
+               (3 * μ / r**2) * j_2 * ((R/r)**2)*sin(θ)*cos(θ)
+        dϕdt = z
+        dzdt = (-2 * (z + Ω) * (x*sin(θ) + r*y*cos(θ)) + (β*(x*B_θ - r*y*B_r)))/(r*sin(θ))
+
+        return np.array([drdt, dxdt, dθdt, dydt, dϕdt, dzdt])
+
+# TIME SPAN
+    t_span = (0,8000)
+    #t = np.linspace(t_span[0],t_span[1],86400)
+    
+    dt_desired = 1  # Desired time step in seconds
+    num_points = int((t_span[1] - t_span[0])/dt_desired) + 1
+    t = np.linspace(t_span[0], t_span[1], num_points)
+    
+# INITIAL CONDITIONS
+    p0 = np.array([r0, 0.0, 90.0*(pi/180), 0.0 *(pi/180), 0.0*(pi /180),aS])
+ #Keplerian orbital velocity modeled as =18.277*SQRT(1.86/(AD1/60280))
+                  
+# SOLUTIONS
+    sol = solve_ivp(odes, t_span, p0, t_eval=t, events=[event_func_r,event_func_outer], method="RK23",
+                    dense_output=True)
+    
+    #np.savetxt('100dys_1kdt_1-3e-11_time_Rot.txt',sol.t)
+    #np.savetxt('100dys_1kdt_1-3e-11_r_Rot.txt',sol.y[0,:])
+    #np.savetxt('100dys_1kdt_1-3e-11_dr_Rot.txt',sol.y[1,:])
+    #np.savetxt('100dys_1kdt_1-3e-11_theta_Rot.txt',sol.y[2,:])
+    #np.savetxt('100dys_1kdt_1-3e-11_dtheta_Rot.txt',sol.y[3,:])
+    #np.savetxt('100dys_1kdt_1-3e-11_phi_Rot.txt',sol.y[4,:])
+    #np.savetxt('100dys_1kdt_1-3e-11_dphi_Rot.txt',sol.y[5,:])
+    
+# EXTRACT FINAL VALUES AND END TIME
+    final_values = sol.y[:, -1]
+    end_time = sol.t[-1]
+    
+    # PRINT FINAL VALUES
+    print(f"For b = {b_value}:")
+    print("Final Values:", final_values)
+    print("End Time:", end_time)
+    
+    #np.savetxt('(1-3)e-11_FINAL VALUES_Rot.txt',final_values,end_time)
+
+# EVENTS DETECTION AND TERMINATION
+    if sol.status == 0 and len(sol.t_events[0]) > 0:
+        for i, event_time in enumerate(sol.t_events[0]):
+            event_idx = np.where(t >= event_time)[0][0]
+            t_event = sol.t_events[0][i]
+            r_event = sol.y_events[0][i, 0]
+            print(f"Event {i + 1} occurred at time {t_event:.2f} seconds. Radial distance: {r_event:.2f}")
+        else:
+            event_idx = len(t) - 1  # Plot until the end if no event occurred
+            print("Integration completed without reaching the specified event condition.")
+    
+    print("Integration Status:", sol.message)
+    print("Number of Events Detected:", len(sol.t_events[0]))
+        
+    #print (sol)
+    # Choose color for the current b value
+    color = colors[i]
+        
+    # 3D Trajectories around the sphere
+    x_traj = sol.y[0, :] * np.sin(sol.y[2, :]) * np.cos(sol.y[4, :])
+    y_traj = sol.y[0, :] * np.sin(sol.y[2, :]) * np.sin(sol.y[4, :])
+    z_traj = sol.y[0, :] * np.cos(sol.y[2, :])
+    
+# TRAJECTORIE IN 3D CARTESIAN
+    ax_3d.plot3D(x_traj, y_traj, z_traj, label=f'b={b_value}', linewidth='0.5', linestyle='solid',
+                 color=color, alpha=0.6)
+    plt.xticks(fontsize=14), plt.yticks(fontsize=14)
+    ax_3d.legend(loc='upper left', bbox_to_anchor=(1.3, 1), borderaxespad=0.,
+                 title="Legend",fontsize=8,title_fontsize=8,ncol=1)
+    
+    x_traj1 = sol.y[0, :] * np.sin(sol.y[2, :]) * np.cos(sol.y[4, :])
+    y_traj1 = sol.y[0, :] * np.sin(sol.y[2, :]) * np.sin(sol.y[4, :])
+    z_traj1 = sol.y[0, :] * np.cos(sol.y[2, :])
+   
+    # Update the plot3D calls in both figures
+    ax_3d_sphere_center.plot3D(x_traj1, y_traj1, z_traj1, label=f'b={b_value}', linewidth='1',
+                               linestyle='solid', color=color, alpha=1,zorder=10)
+    #ax_3d_sphere_center.legend(loc='upper left', bbox_to_anchor=(1.3, 1.0), borderaxespad=0.,title="Legend",fontsize=8,title_fontsize=8,ncol=1)
+       #plt.show()
+    
+# POSITION VARIABLES
+    axs_1d[0, 0].plot(sol.t, sol.y[0, :], linewidth='0.8', linestyle='solid', alpha=0.8, color=color, label=f'b={b_value}')
+    axs_1d[0, 1].plot(sol.t, sol.y[1, :], linewidth='0.8', linestyle='solid', alpha=0.8, color=color, label=f'b={b_value}')
+    axs_1d[0, 2].plot(sol.t, sol.y[2, :], linewidth='0.8', linestyle='solid', alpha=0.8, color=color, label=f'b={b_value}')
+    axs_1d[1, 0].plot(sol.t, sol.y[3, :], linewidth='0.8', linestyle='solid', alpha=0.8, color=color, label=f'b={b_value}')
+    axs_1d[1, 1].plot(sol.t, sol.y[4, :], linewidth='1', linestyle='solid', alpha=1, color=color, label=f'b={b_value}')
+    axs_1d[1, 2].plot(sol.t, sol.y[5, :], linewidth='0.8', linestyle='solid', alpha=0.8, color=color, label=f'b={b_value}')
+
+# FIGURES AND PLOTS
+    # POLAR PLOTS
+    r = sol.y[0, :]
+    phi = sol.y[4, :]
+    axs_polar.plot(phi, r, linewidth='1', linestyle='solid',alpha=1, color=color, label=f'b={b_value}')
+    
+    # Modify x-axis values to reverse the direction
+    #phi_reversed = - phi
+
+    # Plot trajectories without the center circle
+    ax_paths.plot(phi,r, linewidth='0.5', linestyle='solid',alpha=0.6, color=color, label=f'b={b_value}')
+
+# POSITION VARIABLES SUBPLOTS
+for ax in axs_1d.flat:
+    ax.set(xlabel='time (sec)')
+    ax.grid(True)
+    
+# Add y-axis labels
+axs_1d[0, 0].set_ylabel('Radial Distance')
+axs_1d[0, 1].set_ylabel('Radial Speed')
+axs_1d[0, 2].set_ylabel('Co-latitude (θ)')
+axs_1d[1, 0].set_ylabel('Co-latitude Speed')
+axs_1d[1, 1].set_ylabel('Azimuthal Angle (ϕ)')
+axs_1d[1, 2].set_ylabel('Azimuthal Speed')
+
+# Add a single legend for all 1-dimensional subplots outside the plots on the right
+#axs_1d[0, 2].legend(loc='upper left', bbox_to_anchor=(1.1, 1), borderaxespad=0.,title="Legend",fontsize=7,title_fontsize=7, ncol=1)
+
+# POLAR PLOTS OF r VS PHI
+r_ticks_values = [60628e3, 676e5, 7156e4, 7327e4, 7449e4,9e7]
+axs_polar.set_rticks(r_ticks_values)
+# Set limits for radial ticks #axs_polar.set_ylim([0, 7449e4])  # Adjust the limit as needed
+axs_polar.set_yticklabels([])
+axs_polar.set_facecolor('black')
+
+# Add a filled circle at the center with artistic color
+axs_polar.add_patch(plt.Circle((0, 0), R, transform=axs_polar.transData._b, facecolor='#EE9A49',
+                               fill=True, edgecolor='green', linewidth=0.1, zorder=2, alpha=1))
+#axs_polar.legend(loc='upper left', bbox_to_anchor=(1.2, 1.1), borderaxespad=0., title="Legend",fontsize=8, title_fontsize=8, ncol=1)
+
+# Trajectories without the center circle
+# Set plot title and labels
+ax_paths.set_title("Trajectories without Center Circle corotational", pad=20)
+ax_paths.set_xlabel("Azimuthal Angle (ϕ)",fontsize=14)
+ax_paths.set_ylabel("Radial Distance (r)",fontsize=14)
+plt.xticks(fontsize=14), plt.yticks(fontsize=14)
+# Show the legend
+#ax_paths.legend(loc='upper left', bbox_to_anchor=(1.0, 1.1), borderaxespad=0.,title="Legend", fontsize=9, title_fontsize=9, ncol=2)
+# Show the plots
+plt.show()
